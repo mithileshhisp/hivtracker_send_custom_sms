@@ -26,7 +26,7 @@ load_dotenv()
 from utils import (
     configure_logging,
     log_info,log_error,get_sql_view_data,
-    process_and_send_sms
+    process_and_send_sms,process_and_send_awareness_messages_sms
 )
 
 #print("OpenSSL version:", ssl.OPENSSL_VERSION)
@@ -38,6 +38,9 @@ DHIS2_GET_PASSWORD = os.getenv("DHIS2_GET_PASSWORD")
 
 PILL_PICKUP_SQL_VIEW_1_DAY = os.getenv("PILL_PICKUP_SQL_VIEW_1_DAY")
 PILL_PICKUP_SQL_VIEW_7_DAYS = os.getenv("PILL_PICKUP_SQL_VIEW_7_DAYS")
+
+GENERAL_AWARENESS_MESSAGES_SQL_VIEW = os.getenv("GENERAL_AWARENESS_MESSAGES_SQL_VIEW")
+
 
 sql_view_api_url = f"{DHIS2_GET_API_URL}sqlViews"
 
@@ -58,6 +61,7 @@ def main_with_logger():
     #print(f"sql_view_response : {sql_view_response}")
     process_and_send_sms(sql_view_response_1day)
     
+
     print("-" * 50)
     log_info("-" * 50)
 
@@ -65,9 +69,20 @@ def main_with_logger():
     print( f"Sending SMS process start for 7 day duedate. { current_time_start }" )
     log_info(f"Sending SMS process start for 7 day duedate . { current_time_start }")
 
-    #sql_view_response_7day = get_sql_view_data( sql_view_api_url, session_get, PILL_PICKUP_SQL_VIEW_7_DAYS )
+    sql_view_response_7day = get_sql_view_data( sql_view_api_url, session_get, PILL_PICKUP_SQL_VIEW_7_DAYS )
     #print(f"sql_view_response : {sql_view_response}")
-    #process_and_send_sms(sql_view_response_7day)
+    process_and_send_sms(sql_view_response_7day)
+
+    print("-" * 50)
+    log_info("-" * 50)
+
+    current_time_start = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print( f"Sending SMS process start for General Awareness Messages. { current_time_start }" )
+    log_info(f"Sending SMS process start for General Awareness Messages . { current_time_start }")
+
+    sql_view_response_awareness_messages = get_sql_view_data( sql_view_api_url, session_get, GENERAL_AWARENESS_MESSAGES_SQL_VIEW )
+    #print(f"sql_view_response : {sql_view_response}")
+    process_and_send_awareness_messages_sms(sql_view_response_awareness_messages)
 
 
     

@@ -274,6 +274,58 @@ def process_and_send_sms(sql_view_response):
     
     #send_sms(9745420205, customMessagePillPick, org_name )
 
+
+def process_and_send_awareness_messages_sms(sql_view_response):
+    
+    list_grid = sql_view_response.get("listGrid", {})
+    
+    headers = [h["name"] for h in list_grid.get("headers", [])]
+    rows = list_grid.get("rows", [])
+
+    log_info(f"tei_list_size for general awareness messages  {len(rows)}")
+    print(f"tei_list_size for general awareness messages {len(rows)}")
+    
+     # ✅ ADD HERE (outside loop)
+    sent_numbers = set()
+
+    for row in rows:
+        row_dict = dict(zip(headers, row))
+
+        sms_consent = row_dict.get("sms_consent")
+        mobile = row_dict.get("mobile_number")
+        due_date = row_dict.get("due_date")
+        org_name = row_dict.get("org_name")
+
+        # ✅ Validation
+        if sms_consent != "true":
+            continue
+        
+        if not mobile or len(mobile) < 10:
+            continue
+
+        #🔴 3. Avoid sending duplicates (optional but recommended)    
+        # ✅ CHECK DUPLICATE (inside loop)
+        if mobile in sent_numbers:
+            continue
+
+        # ✅ ADD TO SET
+        sent_numbers.add(mobile)
+
+        # ✅ Message
+        #message = f"Reminder: Visit {org_name} on {due_date} for pill pickup."
+        #customMessagePillPick = f"तपाइको औषधि लिने बेला भयो, तपाई मिति {due_date} गते {org_name} को केन्द्रमा आउनुहोला |"
+        customMessagePillPick = f"This is General Aawareness Message"
+        # ✅ Send SMS
+        print(f"✅ SMS sent to {mobile}, org_unit:  {org_name}, {customMessagePillPick}")
+        log_info(f"✅ SMS sent to {mobile} org_unit:  {org_name}, {customMessagePillPick}")
+
+        send_sms(mobile, customMessagePillPick, org_name )
+    
+    #send_sms(9745420205, customMessagePillPick, org_name )
+
+
+
+
 def sendEmail():
     # creates SMTP session
     #s = smtplib.SMTP('smtp.gmail.com', 587)
@@ -383,3 +435,130 @@ def sendEmail():
             s.quit()
         except Exception as exception:
             print("Error: %s!\n\n" % exception)
+
+
+
+###sql_view pill_pickup_sms_query_7days -- ILjZvn1sVIC
+###pill_pickup_sms_query -- ti5pvDMLCcT
+##used in python scripts
+###without rank without having better performance
+'''
+SELECT 
+    org.name AS org_name,
+    psi.duedate::date AS due_date,
+    tei.uid AS tei_uid,
+
+    MAX(CASE 
+        WHEN teav.trackedentityattributeid = 2618 
+        THEN teav.value 
+    END) AS SMS_consent,
+    
+	MAX(CASE 
+        WHEN teav.trackedentityattributeid = 9636 
+        THEN teav.value 
+    END) AS Mobile_consent,
+	
+    MAX(CASE 
+        WHEN teav.trackedentityattributeid = 2617 
+        THEN teav.value 
+    END) AS Mobile_number
+
+FROM programstageinstance psi
+
+INNER JOIN organisationunit org 
+    ON org.organisationunitid = psi.organisationunitid
+
+INNER JOIN programinstance pi 
+    ON pi.programinstanceid = psi.programinstanceid 
+
+INNER JOIN trackedentityinstance tei
+    ON tei.trackedentityinstanceid = pi.trackedentityinstanceid
+
+INNER JOIN trackedentityattributevalue teav_sms
+    ON teav_sms.trackedentityinstanceid = pi.trackedentityinstanceid
+    AND teav_sms.trackedentityattributeid = 2618
+    AND teav_sms.value = 'true'
+	
+INNER JOIN trackedentityattributevalue mobile_consent
+	ON mobile_consent.trackedentityinstanceid = pi.trackedentityinstanceid
+	AND mobile_consent.trackedentityattributeid = 9636
+	AND mobile_consent.value = 'available'
+		
+LEFT JOIN trackedentityattributevalue teav 
+    ON teav.trackedentityinstanceid = pi.trackedentityinstanceid 
+
+WHERE 
+    psi.programstageid = 2537 
+    AND psi.status = 'SCHEDULE'
+
+    -- ✅ next 7 days
+	AND psi.duedate::date = CURRENT_DATE + INTERVAL '7 days'
+    --AND psi.duedate >= CURRENT_DATE
+    --AND psi.duedate <  CURRENT_DATE + INTERVAL '7 days'
+
+GROUP BY 
+    org.name,
+    psi.duedate,
+    tei.uid
+ORDER BY psi.duedate DESC;
+
+
+-- without having better performance with rank
+--Get only latest scheduled event per TEI
+-- Filter SMS consent early (avoid HAVING + pivot overhead):
+-- final query for 7 days
+WITH ranked_events AS (
+    SELECT 
+        org.name AS org_name,
+        psi.duedate::date AS due_date,
+        tei.uid AS tei_uid,
+        pi.trackedentityinstanceid,
+
+        teav_mobile.value AS mobile_number,
+
+        ROW_NUMBER() OVER (
+            PARTITION BY pi.trackedentityinstanceid 
+            ORDER BY psi.duedate DESC
+        ) AS rn
+
+    FROM programstageinstance psi
+
+    INNER JOIN organisationunit org 
+        ON org.organisationunitid = psi.organisationunitid
+
+    INNER JOIN programinstance pi 
+        ON pi.programinstanceid = psi.programinstanceid 
+
+    INNER JOIN trackedentityinstance tei
+        ON tei.trackedentityinstanceid = pi.trackedentityinstanceid
+
+    -- ✅ SMS consent filter early
+    INNER JOIN trackedentityattributevalue teav_sms
+        ON teav_sms.trackedentityinstanceid = pi.trackedentityinstanceid
+        AND teav_sms.trackedentityattributeid = 2618
+        AND teav_sms.value = 'true'
+
+    -- ✅ Mobile consent filter early
+    INNER JOIN trackedentityattributevalue mobile_consent
+        ON mobile_consent.trackedentityinstanceid = pi.trackedentityinstanceid
+        AND mobile_consent.trackedentityattributeid = 9636
+        AND mobile_consent.value = 'available'
+
+    -- ✅ mobile number only
+    LEFT JOIN trackedentityattributevalue teav_mobile
+        ON teav_mobile.trackedentityinstanceid = pi.trackedentityinstanceid
+        AND teav_mobile.trackedentityattributeid = 2617
+
+    WHERE 
+        psi.programstageid = 2537 
+        AND psi.status = 'SCHEDULE'
+		AND psi.duedate::date = CURRENT_DATE + INTERVAL '7 days'
+        --AND psi.duedate >= CURRENT_DATE
+        --AND psi.duedate <  CURRENT_DATE + INTERVAL '7 days'
+)
+SELECT *
+FROM ranked_events
+WHERE rn = 1
+ORDER BY due_date DESC;
+
+'''
