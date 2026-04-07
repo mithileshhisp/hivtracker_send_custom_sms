@@ -28,7 +28,7 @@ load_dotenv()
 FROM_EMAIL_ADDR = os.getenv("FROM_EMAIL_ADDR")
 FROM_EMAIL_PASSWORD = os.getenv("FROM_EMAIL_PASSWORD")
 
-from constants import LOG_FILE
+#from constants import LOG_FILE
 #from app import QueueLogHandler
 
 DHIS2_API_URL = os.getenv("DHIS2_API_URL")
@@ -130,7 +130,7 @@ def configure_logging_for_app():
 '''
 
 
-def configure_logging():
+def configure_logging(sms_log_file):
 
     #Optional (Advanced, but useful)
     '''
@@ -147,7 +147,7 @@ def configure_logging():
 
     # Create unique log filename
     #log_filename = f"log_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
-    log_filename = LOG_FILE
+    log_filename = sms_log_file
     #log_filename = f"{LOG_FILE}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.log"
     log_path = os.path.join(LOG_DIR, log_filename)
 
@@ -322,243 +322,3 @@ def process_and_send_awareness_messages_sms(sql_view_response):
         send_sms(mobile, customMessagePillPick, org_name )
     
     #send_sms(9745420205, customMessagePillPick, org_name )
-
-
-
-
-def sendEmail():
-    # creates SMTP session
-    #s = smtplib.SMTP('smtp.gmail.com', 587)
-    # start TLS for security
-    #s.starttls()
-    # Authentication
-    #s.login("ipamis@hispindia.org", "IPAMIS@12345")
-    # message to be sent
-    
-    # message to be sent
-    #message = "Message_you_need_to_send"
-
-    # sending the mail
-    #s.sendmail("ipamis@hispindia.org", "mithilesh.thakur@hispindia.org",message)
-    #print(f"Email send to mithilesh.thakur@hispindia.org")
-    # terminating the session
-    #s.quit()
-    
-
-
-    #fromaddr = "dss.nipi@hispindia.org"
-    fromaddr = FROM_EMAIL_ADDR
-    # list of email_id to send the mail
-    #li = ["mithilesh.thakur@hispindia.org", "saurabh.leekha@hispindia.org","dpatankar@nipi-cure.org","mohinder.singh@hispindia.org"]
-    #li = ["mithilesh.thakur@hispindia.org","sumit.tripathi@hispindia.org","RKonda@fhi360.org"]
-    li = ["mithilesh.thakur@hispindia.org"]
-
-    for toaddr in li:
-
-        #toaddr = "mithilesh.thakur@hispindia.org"
-        
-        # instance of MIMEMultipart 
-        msg = MIMEMultipart() 
-        
-        # storing the senders email address   
-        msg['From'] = fromaddr 
-        
-        # storing the receivers email address  
-        msg['To'] = toaddr 
-        
-        # storing the subject  
-        msg['Subject'] = "Auto Sync ART data from hivtracker to ihmis log file"
-        
-        # string to store the body of the mail 
-        #body = "Python Script test of the Mail"
-
-        today_date = datetime.now().strftime("%Y-%m-%d")
-        #updated_odk_api_url = f"{ODK_API_URL}?$filter=__system/submissionDate ge {today_date}"
-        updated_odk_api_url = f"{today_date}"
-
-        body = f"Auto Sync ART data from hivtracker to ihmis"
-        
-        # attach the body with the msg instance 
-        msg.attach(MIMEText(body, 'plain')) 
-        
-        
-        # open the file to be sent  
-
-        LOG_DIR = "logs"
-        PATTERN = "*_dataValueSet_post.log"
-
-        # Find latest matching log file
-        log_files = glob.glob(os.path.join(LOG_DIR, PATTERN))
-        if not log_files:
-            raise FileNotFoundError("No log files found")
-
-        latest_log = max(log_files, key=os.path.getmtime)
-
-        filename = LOG_FILE
-        #attachment = open(filename, "rb") 
-        attachment = open(latest_log, "rb") 
-        
-        # instance of MIMEBase and named as p 
-        p = MIMEBase('application', 'octet-stream') 
-        
-        # To change the payload into encoded form 
-        p.set_payload((attachment).read()) 
-        
-        # encode into base64 
-        encoders.encode_base64(p) 
-        
-        p.add_header('Content-Disposition', "attachment; filename= %s" % filename) 
-        
-        # attach the instance 'p' to instance 'msg' 
-        msg.attach(p) 
-        try:
-            # creates SMTP session 
-            s = smtplib.SMTP('smtp.gmail.com', 587) 
-            
-            # start TLS for security 
-            s.starttls() 
-            
-            # Authentication 
-            #s.login(fromaddr, "NIPIODKHispIndia@123")
-            #s.login(fromaddr, "dztnzuvhbxlauwxy") ## set app password App Name Mail as on 22/12/2025
-            s.login(fromaddr, FROM_EMAIL_PASSWORD)
-            
-
-            # Converts the Multipart msg into a string 
-            text = msg.as_string() 
-            
-            # sending the mail 
-            s.sendmail(fromaddr, toaddr, text) 
-            print(f"mail send to: {toaddr}")
-            log_info(f"mail send to: {toaddr}")
-            # terminating the session 
-            s.quit()
-        except Exception as exception:
-            print("Error: %s!\n\n" % exception)
-
-
-
-###sql_view pill_pickup_sms_query_7days -- ILjZvn1sVIC
-###pill_pickup_sms_query -- ti5pvDMLCcT
-##used in python scripts
-###without rank without having better performance
-'''
-SELECT 
-    org.name AS org_name,
-    psi.duedate::date AS due_date,
-    tei.uid AS tei_uid,
-
-    MAX(CASE 
-        WHEN teav.trackedentityattributeid = 2618 
-        THEN teav.value 
-    END) AS SMS_consent,
-    
-	MAX(CASE 
-        WHEN teav.trackedentityattributeid = 9636 
-        THEN teav.value 
-    END) AS Mobile_consent,
-	
-    MAX(CASE 
-        WHEN teav.trackedentityattributeid = 2617 
-        THEN teav.value 
-    END) AS Mobile_number
-
-FROM programstageinstance psi
-
-INNER JOIN organisationunit org 
-    ON org.organisationunitid = psi.organisationunitid
-
-INNER JOIN programinstance pi 
-    ON pi.programinstanceid = psi.programinstanceid 
-
-INNER JOIN trackedentityinstance tei
-    ON tei.trackedentityinstanceid = pi.trackedentityinstanceid
-
-INNER JOIN trackedentityattributevalue teav_sms
-    ON teav_sms.trackedentityinstanceid = pi.trackedentityinstanceid
-    AND teav_sms.trackedentityattributeid = 2618
-    AND teav_sms.value = 'true'
-	
-INNER JOIN trackedentityattributevalue mobile_consent
-	ON mobile_consent.trackedentityinstanceid = pi.trackedentityinstanceid
-	AND mobile_consent.trackedentityattributeid = 9636
-	AND mobile_consent.value = 'available'
-		
-LEFT JOIN trackedentityattributevalue teav 
-    ON teav.trackedentityinstanceid = pi.trackedentityinstanceid 
-
-WHERE 
-    psi.programstageid = 2537 
-    AND psi.status = 'SCHEDULE'
-
-    -- ✅ next 7 days
-	AND psi.duedate::date = CURRENT_DATE + INTERVAL '7 days'
-    --AND psi.duedate >= CURRENT_DATE
-    --AND psi.duedate <  CURRENT_DATE + INTERVAL '7 days'
-
-GROUP BY 
-    org.name,
-    psi.duedate,
-    tei.uid
-ORDER BY psi.duedate DESC;
-
-
--- without having better performance with rank
---Get only latest scheduled event per TEI
--- Filter SMS consent early (avoid HAVING + pivot overhead):
--- final query for 7 days
-WITH ranked_events AS (
-    SELECT 
-        org.name AS org_name,
-        psi.duedate::date AS due_date,
-        tei.uid AS tei_uid,
-        pi.trackedentityinstanceid,
-
-        teav_mobile.value AS mobile_number,
-
-        ROW_NUMBER() OVER (
-            PARTITION BY pi.trackedentityinstanceid 
-            ORDER BY psi.duedate DESC
-        ) AS rn
-
-    FROM programstageinstance psi
-
-    INNER JOIN organisationunit org 
-        ON org.organisationunitid = psi.organisationunitid
-
-    INNER JOIN programinstance pi 
-        ON pi.programinstanceid = psi.programinstanceid 
-
-    INNER JOIN trackedentityinstance tei
-        ON tei.trackedentityinstanceid = pi.trackedentityinstanceid
-
-    -- ✅ SMS consent filter early
-    INNER JOIN trackedentityattributevalue teav_sms
-        ON teav_sms.trackedentityinstanceid = pi.trackedentityinstanceid
-        AND teav_sms.trackedentityattributeid = 2618
-        AND teav_sms.value = 'true'
-
-    -- ✅ Mobile consent filter early
-    INNER JOIN trackedentityattributevalue mobile_consent
-        ON mobile_consent.trackedentityinstanceid = pi.trackedentityinstanceid
-        AND mobile_consent.trackedentityattributeid = 9636
-        AND mobile_consent.value = 'available'
-
-    -- ✅ mobile number only
-    LEFT JOIN trackedentityattributevalue teav_mobile
-        ON teav_mobile.trackedentityinstanceid = pi.trackedentityinstanceid
-        AND teav_mobile.trackedentityattributeid = 2617
-
-    WHERE 
-        psi.programstageid = 2537 
-        AND psi.status = 'SCHEDULE'
-		AND psi.duedate::date = CURRENT_DATE + INTERVAL '7 days'
-        --AND psi.duedate >= CURRENT_DATE
-        --AND psi.duedate <  CURRENT_DATE + INTERVAL '7 days'
-)
-SELECT *
-FROM ranked_events
-WHERE rn = 1
-ORDER BY due_date DESC;
-
-'''
